@@ -1,14 +1,15 @@
+
 {
-  "name": "your-project-name",
+  "name": "polypoly-game",
   "version": "1.0.0",
-  "description": "Your project description",
+  "description": "PolyPoly game with real-time updates using Socket.IO",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.17.1",
-    "socket.io": "^4.1.2"
+    "socket.io": "^4.4.1"
   },
   "engines": {
     "node": "14.x"
