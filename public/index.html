@@ -232,8 +232,9 @@
             background-color: #45a049;
         }
     </style>
-     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
 </head>
+
 <body>
     <button id="authButton" class="login-button" onclick="toggleAuth()">登入</button>
     <div id="loginModal" class="modal">
@@ -261,8 +262,6 @@
     </div>
 
     <script>
-        const socket = io();
-
         const colors = ['#ccc', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
         const colorNames = ['灰色', '紅色', '綠色', '藍色', '黃色', '紫色', '青色'];
         const positions = [
@@ -273,10 +272,62 @@
         ];
 
         let isLoggedIn = false;
+        let socket;
 
-        function createButtons(initialState) {
+        function connectWebSocket() {
+            socket = io(); // 或使用您的伺服器 URL，如 io('http://your-server-url');
+
+            socket.on('connect', () => {
+                console.log('Connected to WebSocket server');
+                socket.emit('requestInitialState');
+            });
+
+            socket.on('initialState', (state) => {
+                applyInitialState(state);
+            });
+
+            socket.on('updateButton', (data) => {
+                applyButtonUpdate(data);
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from WebSocket server');
+                setTimeout(connectWebSocket, 5000); // 嘗試重新連接
+            });
+        }
+
+        function applyInitialState(state) {
+            state.buttons.forEach((buttonState, index) => {
+                const button = document.querySelectorAll('.square')[index];
+                if (button && button.id !== 'station') {
+                    const colorSelect = button.querySelector('select');
+                    const houseSelect = button.querySelectorAll('select')[1];
+                    colorSelect.value = buttonState.color;
+                    houseSelect.value = buttonState.houses;
+                    button.style.backgroundColor = buttonState.color;
+                    updateHouses(houseSelect, buttonState.houses, false);
+                }
+            });
+        }
+
+        function applyButtonUpdate(data) {
+            const { index, color, houses } = data;
+            const button = document.querySelectorAll('.square')[index];
+            if (button && button.id !== 'station') {
+                const colorSelect = button.querySelector('select');
+                const houseSelect = button.querySelectorAll('select')[1];
+                colorSelect.value = color;
+                houseSelect.value = houses;
+                button.style.backgroundColor = color;
+                updateHouses(houseSelect, houses, false);
+            }
+        }
+
+        function createButtons() {
             const container = document.getElementById('buttonContainer');
             container.innerHTML = ''; // 清空容器以防重複
+
+            const savedStates = JSON.parse(localStorage.getItem('buttonStates')) || [];
 
             for (let i = 0; i < 18; i++) {
                 const button = document.createElement('div');
@@ -290,7 +341,7 @@
                     button.textContent = '活力補給站';
                 } else {
                     const colorSelect = document.createElement('select');
-                    colorSelect.onchange = function() { changeColor(this, i); };
+                    colorSelect.onchange = function() { changeColor(this); };
 
                     colors.forEach((color, index) => {
                         const option = document.createElement('option');
@@ -300,7 +351,7 @@
                     });
 
                     const houseSelect = document.createElement('select');
-                    houseSelect.onchange = function() { updateHouses(this, i); };
+                    houseSelect.onchange = function() { updateHouses(this); };
 
                     for (let j = 0; j <= 5; j++) {
                         const option = document.createElement('option');
@@ -316,17 +367,12 @@
                     button.appendChild(houseSelect);
                     button.appendChild(houseContainer);
 
-                    // 設定初始狀態
-                    if (initialState && initialState.buttons && initialState.buttons[i]) {
-                        colorSelect.value = initialState.buttons[i].color;
-                        houseSelect.value = initialState.buttons[i].houses;
+                    // 設定按鈕狀態
+                    if (savedStates[i]) {
+                        colorSelect.value = savedStates[i].color || '#ccc';
+                        houseSelect.value = savedStates[i].houses || 0;
                         button.style.backgroundColor = colorSelect.value;
-                        updateHouses(houseSelect, i, initialState.buttons[i].houses);
-                    } else {
-                        // 如果沒有初始狀態，設置默認值
-                        colorSelect.value = '#ccc';
-                        houseSelect.value = '0';
-                        button.style.backgroundColor = '#ccc';
+                        updateHouses(houseSelect, savedStates[i].houses, false);
                     }
                 }
 
@@ -335,15 +381,18 @@
             updateButtonState();
         }
 
-        function changeColor(select, index) {
+        function changeColor(select) {
             if (!isLoggedIn) return;
             const color = select.value;
             select.parentElement.style.backgroundColor = color;
-            socket.emit('updateButton', { index, color, houses: parseInt(select.nextElementSibling.value) });
+            const index = Array.from(document.querySelectorAll('.square')).indexOf(select.parentElement);
+            const houses = parseInt(select.parentElement.querySelectorAll('select')[1].value);
+            socket.emit('updateButton', { index, color, houses });
+            saveButtonStates();
         }
 
-        function updateHouses(select, index, numHouses = select.value) {
-            if (!isLoggedIn) return;
+        function updateHouses(select, numHouses = select.value, shouldEmit = true) {
+            if (!isLoggedIn && shouldEmit) return;
             const container = select.nextElementSibling;
             container.innerHTML = '';
 
@@ -352,7 +401,26 @@
                 house.className = 'house-icon';
                 container.appendChild(house);
             }
-            socket.emit('updateButton', { index, color: select.previousElementSibling.value, houses: parseInt(numHouses) });
+            if (shouldEmit) {
+                const index = Array.from(document.querySelectorAll('.square')).indexOf(select.parentElement);
+                const color = select.parentElement.querySelector('select').value;
+                socket.emit('updateButton', { index, color, houses: parseInt(numHouses) });
+            }
+            saveButtonStates();
+        }
+
+        function saveButtonStates() {
+            const buttons = document.querySelectorAll('.square');
+            const states = Array.from(buttons).map(button => {
+                if (button.id === 'station') return null;
+                const colorSelect = button.querySelector('select');
+                const houseSelect = button.querySelectorAll('select')[1];
+                return {
+                    color: colorSelect.value,
+                    houses: parseInt(houseSelect.value)
+                };
+            });
+            localStorage.setItem('buttonStates', JSON.stringify(states));
         }
 
         function updateButtonState() {
@@ -417,44 +485,15 @@
             }
         }
 
-        // Socket.IO 事件監聽器
-        socket.on('initialState', (initialState) => {
-            createButtons(initialState);
-        });
-
-        socket.on('buttonUpdated', (data) => {
-            const { index, color, houses } = data;
-            const button = document.querySelectorAll('.square')[index];
-            if (button) {
-                const colorSelect = button.querySelector('select');
-                const houseSelect = button.querySelectorAll('select')[1];
-                colorSelect.value = color;
-                houseSelect.value = houses;
-                button.style.backgroundColor = color;
-                updateHouses(houseSelect, index, houses);
-            }
-        });
-
         // 頁面加載時檢查登入狀態並創建按鈕
         window.onload = function() {
             isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
             if (isLoggedIn) {
                 document.getElementById('authButton').textContent = '登出';
             }
-            // 如果沒有接收到 initialState，也要創建按鈕
             createButtons();
+            connectWebSocket();
         };
-
-        // 確保 DOM 完全加載後再綁定事件
-        document.addEventListener('DOMContentLoaded', (event) => {
-            document.getElementById('authButton').addEventListener('click', toggleAuth);
-            document.getElementById('loginForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                const username = document.getElementById('username').value;
-                const password = document.getElementById('password').value;
-                login(username, password);
-            });
-        });
     </script>
 
     <footer>
