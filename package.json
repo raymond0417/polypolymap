@@ -1,18 +1,16 @@
-
 {
-  "name": "polypoly-game",
+  "name": "polypoly-board-game",
   "version": "1.0.0",
-  "description": "PolyPoly game with real-time updates using Socket.IO",
+  "description": "PolyPoly Board Game with Real-time Updates",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.17.1",
-    "socket.io": "^4.4.1"
+    "socket.io": "^4.3.2"
   },
   "engines": {
     "node": "14.x"
-  },
-  "license": "MIT"
+  }
 }
