@@ -24,16 +24,16 @@
         .container {
             position: relative;
             width: 90vw;
-            max-width: 580px;
+            max-width: 800px;
             height: 90vw;
-            max-height: 660px;
+            max-height: 800px;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 20px;
             backdrop-filter: blur(10px);
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            grid-template-rows: repeat(5, 1fr);
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
             gap: 10px;
             padding: 20px;
             box-sizing: border-box;
@@ -41,7 +41,7 @@
         .square {
             width: 100%;
             height: 0;
-            padding-bottom: 100%; /* 使按鈕變為正方形 */
+            padding-bottom: 100%;
             background-color: rgba(204, 204, 204, 0.7);
             border: 2px solid #000;
             border-radius: 8px;
@@ -56,7 +56,7 @@
             color: #000;
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
             position: relative;
-            overflow: hidden; /* 防止內容溢出 */
+            overflow: hidden;
         }
         .square-content {
             position: absolute;
@@ -262,6 +262,42 @@
                 font-size: 10px;
             }
         }
+        #station, #card-shop {
+            background: linear-gradient(145deg, #ff9a9e, #fad0c4);
+            color: #fff;
+            font-size: 12px;
+            text-align: center;
+            line-height: 1.2;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            border: none;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #station::before, #card-shop::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: rgba(255,255,255,0.1);
+            transform: rotate(45deg);
+            animation: shine 3s infinite;
+        }
+
+        #station .square-content, #card-shop .square-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            padding: 5px;
+            box-sizing: border-box;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
 </head>
@@ -296,11 +332,14 @@
         const colors = ['#ccc', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffffff'];
         const colorNames = ['灰色', '紅色', '綠色', '藍色', '黃色', '紫色', '青色', '白色'];
         const buttonOrder = [
-            1, 2, 3, 4, 5, 6,
-            18, null, null, null, null, 7,
-            17, null, null, null, null, 8,
-            16, null, null, null, null, 9,
-            15, 14, 13, 12, 11, 10
+            1, 2, 3, 4, 5, 6, 7, 8,
+            28, null, null, null, null, null, null, 9,
+            27, null, null, null, null, null, null, 10,
+            26, null, null, null, null, null, null, 11,
+            25, null, null, null, null, null, null, 12,
+            24, null, null, null, null, null, null, 13,
+            23, null, null, null, null, null, null, 14,
+            22, 21, 20, 19, 18, 17, 16, 15
         ];
     
         let isLoggedIn = false;
@@ -315,10 +354,12 @@
             });
     
             socket.on('initialState', (state) => {
+                console.log('Received initial state:', state);
                 applyInitialState(state);
             });
     
             socket.on('updateButton', (data) => {
+                console.log('Received button update:', data);
                 applyButtonUpdate(data);
             });
     
@@ -329,23 +370,32 @@
         }
     
         function applyInitialState(state) {
-            state.buttons.forEach((buttonState, index) => {
-                updateButtonUI(index, buttonState.color, buttonState.houses);
-            });
+            if (state && state.buttons) {
+                state.buttons.forEach((buttonState, index) => {
+                    updateButtonUI(index, buttonState.color, buttonState.houses);
+                });
+            } else {
+                console.error('Invalid initial state received:', state);
+            }
         }
     
         function applyButtonUpdate(data) {
-            const { index, color, houses } = data;
-            updateButtonUI(index, color, houses);
+            if (data && typeof data.index !== 'undefined' && data.color && typeof data.houses !== 'undefined') {
+                const { index, color, houses } = data;
+                updateButtonUI(index, color, houses);
+            } else {
+                console.error('Invalid button update data received:', data);
+            }
         }
     
         function updateButtonUI(index, color, houses) {
-            const button = document.querySelectorAll('.square')[index];
-            if (button && button.id !== 'station') {
+            const buttons = document.querySelectorAll('.square');
+            const button = buttons[index];
+            if (button && button.id !== 'station' && button.id !== 'card-shop') {
                 const colorSelect = button.querySelector('select');
                 const houseSelect = button.querySelectorAll('select')[1];
-                colorSelect.value = color;
-                houseSelect.value = houses;
+                if (colorSelect) colorSelect.value = color;
+                if (houseSelect) houseSelect.value = houses;
                 button.style.backgroundColor = color;
                 updateHousesUI(button, houses);
             }
@@ -369,9 +419,12 @@
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'square-content';
     
-                if (number === 6) {
+                if (number === 8) {
                     button.id = 'station';
                     contentDiv.textContent = '活力補給站';
+                } else if (number === 15) {
+                    button.id = 'card-shop';
+                    contentDiv.textContent = '卡片商店';
                 } else {
                     const colorSelect = document.createElement('select');
                     colorSelect.onchange = function() { changeColor(this); };
@@ -410,9 +463,10 @@
         function changeColor(select) {
             if (!isLoggedIn) return;
             const color = select.value;
-            select.closest('.square').style.backgroundColor = color;
-            const index = Array.from(document.querySelectorAll('.square')).indexOf(select.closest('.square'));
-            const houses = parseInt(select.closest('.square-content').querySelectorAll('select')[1].value);
+            const square = select.closest('.square');
+            square.style.backgroundColor = color;
+            const index = Array.from(document.querySelectorAll('.square')).indexOf(square);
+            const houses = parseInt(square.querySelector('select:nth-child(2)').value);
             socket.emit('updateButton', { index, color, houses });
         }
     
@@ -446,7 +500,6 @@
                 }
             });
         }
-    
         function toggleAuth() {
             if (isLoggedIn) {
                 logout();
